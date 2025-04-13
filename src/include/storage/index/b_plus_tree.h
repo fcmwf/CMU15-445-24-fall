@@ -62,11 +62,21 @@ class Context {
 
   // Store the write guards of the pages that you're modifying here.
   std::deque<WritePageGuard> write_set_;
-
   // You may want to use this when getting value, but not necessary.
   std::deque<ReadPageGuard> read_set_;
 
-  auto IsRootPage(page_id_t page_id) -> bool { return page_id == root_page_id_; }
+  std::deque<BPlusTreePage*> write_nodes_;  // node that locked and may be modified
+  std::deque<WritePageGuard> lock_set_;  // just need lock and we never use it
+  auto SetPageParent(page_id_t page_id, page_id_t parent_id) -> bool{
+    std::cout << "SetPageParent: " << page_id << " " << parent_id << std::endl;
+    for(auto &node: write_nodes_){
+      if(node->GetPageId()==page_id){
+        node->SetParentId(parent_id);
+        return true;
+      }
+    }
+    return false;
+  }
 };
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
@@ -98,11 +108,11 @@ class BPlusTree {
   auto GetRootPageId() -> page_id_t;
   
   // helper function
-  auto FindLeaf(const KeyType &key ) -> page_id_t;
-  auto SplitLeafNode(page_id_t leaf_id) -> page_id_t;
-  auto SplitInternalNode(page_id_t internal_id) -> page_id_t;
-  void InsertLeaf2Parent(const KeyType &key,  page_id_t old_id, page_id_t new_id);
-  void InsertInternalPage2Parent(page_id_t internal_id);
+  void FindLeaf(const KeyType &key , Context &ctx, const Operation &mode ) ;
+  auto SplitLeafNode(LeafPage* old_node, Context &ctx) -> WritePageGuard;
+  auto SplitInternalNode(InternalPage* old_node,  Context &ctx) -> WritePageGuard;
+  void InsertLeaf2Parent(const KeyType &key, LeafPage * old_node, LeafPage * new_node, Context &ctx);
+  void InsertInternalPage2Parent(InternalPage* old_node, Context &ctx);
 
   // Leaf process
   void LeafMerge(page_id_t left_leaf, page_id_t right_leaf);

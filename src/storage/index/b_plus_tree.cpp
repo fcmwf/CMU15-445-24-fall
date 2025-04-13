@@ -13,7 +13,7 @@
 #include "storage/index/b_plus_tree.h"
 #include "storage/index/b_plus_tree_debug.h"
 
-#define DEBUG_INSERT
+// #define DEBUG_INSERT
 // #define DEBUG_DELETE
 
 namespace bustub {
@@ -57,17 +57,16 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   Context ctx;
   ReadPageGuard read_page_guard = bpm_->ReadPage(root_page_id_);
   auto node = reinterpret_cast< const BPlusTreePage *>(read_page_guard.GetData());
+  ctx.read_set_.push_back(std::move(read_page_guard));
   while (!node->IsLeafPage()) {
-      ReadPageGuard  pre_guard;
-      auto v = reinterpret_cast<const InternalPage *>(read_page_guard.GetData())->Lookup(key, comparator_);
-      pre_guard = std::move(read_page_guard);
+      auto v = reinterpret_cast<const InternalPage *>(ctx.read_set_.back().GetData())->Lookup(key, comparator_);
       read_page_guard = bpm_->ReadPage(v);
-      pre_guard.Drop();
       node = reinterpret_cast<const BPlusTreePage *>(read_page_guard.GetData());
+      ctx.read_set_.pop_back();
+      ctx.read_set_.push_back(std::move(read_page_guard));
   }
-  auto n = reinterpret_cast< const LeafPage *>(read_page_guard.GetData());
+  auto n = reinterpret_cast< const LeafPage *>(ctx.read_set_.back().GetData());
   std::optional<ValueType> v = n->Lookup(key, comparator_);
-  read_page_guard.Drop();
   if(v.has_value()){ 
     result->emplace_back(std::move(v.value()));
     return true;
@@ -95,11 +94,10 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool 
   // Declaration of context instance. Using the Context is not necessary but advised.
   // Context ctx;
   //Get root and check wheather it is existed
+  Context ctx;
   #ifdef DEBUG_INSERT
   std::cout << "Insert key: " << key << std::endl;
   std::cout << "value: " <<value;
-  ReadPageGuard debug_guard1;
-  ReadPageGuard debug_guard2;
   #endif
   if(IsEmpty()){
     page_id_t page_id = bpm_->NewPage();
@@ -112,18 +110,14 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool 
     root_page_leaf->Init(page_id,leaf_max_size_);
     root_page_leaf->Insert(key, value, comparator_);
     SetRootPage(page_id);
-    write_guard.Drop();
-    // bpm_->FlushPage(page_id);
     #ifdef DEBUG_INSERT
-    debug_guard1 = bpm_->ReadPage(GetRootPageId());
-    reinterpret_cast<const LeafPage *>(debug_guard1.GetData())->NodePrint();
-    debug_guard1.Drop();
+    root_page_leaf->NodePrint();
     #endif
     return true;
   }
-
-  page_id_t page_id = FindLeaf(key);
-  WritePageGuard write_guard = bpm_->WritePage(page_id);   
+  FindLeaf(key, ctx, Operation::INSERT);
+  WritePageGuard write_guard = std::move(ctx.write_set_.back());
+  ctx.write_set_.pop_back();   
   LeafPage *leaf_node = reinterpret_cast<LeafPage *>(write_guard.GetDataMut());
   if(!leaf_node->Insert(key,value,comparator_)){   //duplicate key
     #ifdef DEBUG_INSERT
@@ -132,21 +126,16 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool 
     return false;
   }
   if (leaf_node->GetSize() > leaf_node->GetMaxSize()) {   // split leaf node
-    write_guard.Drop();
-    page_id_t newNode_id = SplitLeafNode(page_id);
-    WritePageGuard new_leaf_guard = bpm_->WritePage(newNode_id);
+    WritePageGuard new_leaf_guard = SplitLeafNode(leaf_node, ctx);
     LeafPage* new_leaf_node = reinterpret_cast<LeafPage *>(new_leaf_guard.GetDataMut());
+    ctx.write_nodes_.push_back(reinterpret_cast<BPlusTreePage *>(new_leaf_guard.GetDataMut()));
     #ifdef DEBUG_INSERT
     std::cout << "leaf need split" << std::endl;
-    debug_guard1 = bpm_->ReadPage(page_id);
-    const LeafPage* oldNode = reinterpret_cast<const LeafPage *>(debug_guard1.GetData());
-    oldNode->NodePrint();
+    leaf_node->NodePrint();
     new_leaf_node->NodePrint();
-    debug_guard1.Drop();
     #endif
     // insert to parent 递归
-    new_leaf_guard.Drop();
-    InsertLeaf2Parent(new_leaf_node->KeyAt(0), page_id, newNode_id);
+    InsertLeaf2Parent(new_leaf_node->KeyAt(0), leaf_node, new_leaf_node, ctx);
     return true;
   }
   #ifdef DEBUG_INSERT
@@ -156,11 +145,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value) -> bool 
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::InsertLeaf2Parent(const KeyType &key, page_id_t old_id, page_id_t new_id) {
-    WritePageGuard write_guard_oldNode = bpm_->WritePage(old_id);
-    LeafPage* old_node = reinterpret_cast<LeafPage *>(write_guard_oldNode.GetDataMut());
-    WritePageGuard write_guard_newNode = bpm_->WritePage(new_id);
-    LeafPage* new_node = reinterpret_cast<LeafPage *>(write_guard_newNode.GetDataMut());
+void BPLUSTREE_TYPE::InsertLeaf2Parent(const KeyType &key, LeafPage * old_node, LeafPage * new_node, Context &ctx) {
 
     if (old_node->GetPageId()==GetRootPageId()) {
         page_id_t pageId = bpm_->NewPage();
@@ -184,30 +169,26 @@ void BPLUSTREE_TYPE::InsertLeaf2Parent(const KeyType &key, page_id_t old_id, pag
         return;
     }
     new_node->SetParentId(old_node->GetParentId());
-    write_guard_oldNode.Drop();
-    write_guard_newNode.Drop();
-    WritePageGuard parent_page = bpm_->WritePage(old_node->GetParentId());
+    WritePageGuard parent_page = std::move(ctx.write_set_.back());
+    ctx.write_set_.pop_back();
     InternalPage * pa_node = reinterpret_cast<InternalPage *>(parent_page.GetDataMut());
-    pa_node->Insert(key, new_id, comparator_);
+    pa_node->Insert(key, new_node->GetPageId(), comparator_);
     #ifdef DEBUG_INSERT
     pa_node->NodePrint();
     #endif
     if (pa_node->GetSize() <= pa_node->GetMaxSize()) {
         return;
     }
-    page_id_t parent_id = pa_node->GetPageId();
-    parent_page.Drop();
-    InsertInternalPage2Parent(parent_id);
+    InsertInternalPage2Parent(pa_node, ctx);
     return;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::InsertInternalPage2Parent(page_id_t internal_id) {  // node should bbe splited and insert to their parent
-  page_id_t new_internal_id = SplitInternalNode(internal_id);
-  WritePageGuard write_guard_newNode = bpm_->WritePage(new_internal_id);
+void BPLUSTREE_TYPE::InsertInternalPage2Parent(InternalPage* old_node, Context &ctx) {  // node should bbe splited and insert to their parent
+  WritePageGuard write_guard_newNode = SplitInternalNode(old_node,ctx);
   InternalPage* new_node = reinterpret_cast<InternalPage *>(write_guard_newNode.GetDataMut());
-  WritePageGuard write_guard_oldNode = bpm_->WritePage(internal_id);
-  InternalPage* old_node = reinterpret_cast<InternalPage *>(write_guard_oldNode.GetDataMut());
+  ctx.write_nodes_.push_back(reinterpret_cast<BPlusTreePage *>(write_guard_newNode.GetDataMut()));
+
   KeyType insert_key = new_node->KeyAt(0);
   if (old_node->GetPageId()==GetRootPageId()) {
     page_id_t pageId = bpm_->NewPage();
@@ -230,28 +211,29 @@ void BPLUSTREE_TYPE::InsertInternalPage2Parent(page_id_t internal_id) {  // node
     #endif
     return;
   }
-  WritePageGuard write_guard = bpm_->WritePage(old_node->GetParentId());
+  WritePageGuard write_guard = std::move(ctx.write_set_.back());
+  ctx.write_set_.pop_back();
   InternalPage* parent_page = reinterpret_cast<InternalPage *>(write_guard.GetDataMut());
   parent_page->Insert(insert_key,new_node->GetPageId(),comparator_);
   new_node->SetParentId(old_node->GetParentId());
   if(parent_page->GetSize() > parent_page->GetMaxSize()){
-    page_id_t parent_page_id = parent_page->GetPageId();
-    write_guard.Drop();
-    InsertInternalPage2Parent(parent_page_id);
+    InsertInternalPage2Parent(parent_page,ctx);
   }
   return;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::SplitLeafNode(page_id_t leaf_id) -> page_id_t {
-    WritePageGuard write_guard = bpm_->WritePage(leaf_id);
-    LeafPage* old_node = reinterpret_cast<LeafPage *>(write_guard.GetDataMut());
-
+auto BPLUSTREE_TYPE::SplitLeafNode(LeafPage* old_node, Context &ctx) -> WritePageGuard{
+    old_node->NodePrint();
     page_id_t pageId = bpm_->NewPage();
     WritePageGuard write_new_guard = bpm_->WritePage(pageId);
     LeafPage* new_node = reinterpret_cast<LeafPage *>(write_new_guard.GetDataMut());
     
+    WritePageGuard write_guard_next;
     page_id_t leaf_next = old_node->GetNextPageId();
+    if(leaf_next != INVALID_PAGE_ID){
+      write_guard_next = bpm_->WritePage(leaf_next);
+    }
     new_node->Init(pageId, leaf_max_size_);
     new_node->CopyLeafData(old_node->GetSize() / 2, old_node);
     new_node->SetSize(old_node->GetSize() - (old_node->GetSize()) / 2);
@@ -260,20 +242,17 @@ auto BPLUSTREE_TYPE::SplitLeafNode(page_id_t leaf_id) -> page_id_t {
     new_node->SetNextPageId(leaf_next);
     new_node->SetPrevPageId(old_node->GetPageId());
     old_node->SetNextPageId(pageId);
-
+    
     if(leaf_next != INVALID_PAGE_ID){
-      WritePageGuard write_guard_next = bpm_->WritePage(leaf_next);
       reinterpret_cast<LeafPage *>(write_guard_next.GetDataMut())->SetPrevPageId(pageId);
+      ctx.write_nodes_.push_back(reinterpret_cast<BPlusTreePage *>(write_guard_next.GetDataMut()));
+      ctx.lock_set_.push_back(std::move(write_guard_next));
     }
-
-    return pageId;
+    return write_new_guard;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::SplitInternalNode(page_id_t internal_id) -> page_id_t {
-    WritePageGuard write_old_guard = bpm_->WritePage(internal_id);
-    InternalPage* old_node = reinterpret_cast<InternalPage *>(write_old_guard.GetDataMut());
-
+auto BPLUSTREE_TYPE::SplitInternalNode(InternalPage* old_node, Context &ctx) -> WritePageGuard{
     page_id_t pageId = bpm_->NewPage();
     #ifdef DEBUG_INSERT
     std::cout << "new page id: " << pageId << std::endl;
@@ -291,11 +270,12 @@ auto BPLUSTREE_TYPE::SplitInternalNode(page_id_t internal_id) -> page_id_t {
       #ifdef DEBUG_INSERT
       std::cout << "page id: " << page_id << std::endl;
       #endif
-      WritePageGuard guard = bpm_->WritePage(page_id);
-      reinterpret_cast<BPlusTreePage*>(guard.GetDataMut())->SetParentId(pageId);
+      if(!ctx.SetPageParent(page_id,pageId)){
+        WritePageGuard guard = bpm_->WritePage(page_id);
+        reinterpret_cast<BPlusTreePage*>(guard.GetDataMut())->SetParentId(pageId);
+      }
     }
-
-    return pageId;
+    return write_new_guard;
 }
 
 
@@ -322,7 +302,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
   #endif
   if(IsEmpty()){ return; }
 
-  page_id_t leaf_page_id = FindLeaf(key);
+  page_id_t leaf_page_id = FindLeaf(key,ctx,Operation::DELETE);
   WritePageGuard write_guard = bpm_->WritePage(leaf_page_id);
   LeafPage *leaf_node = reinterpret_cast< LeafPage *>(write_guard.GetDataMut());
   #ifdef DEBUG_DELETE
@@ -690,15 +670,23 @@ void BPLUSTREE_TYPE::LeafBorrow(page_id_t page_id, page_id_t sib_id, bool direct
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key ) -> page_id_t{
-  ReadPageGuard read_guard = bpm_->ReadPage(root_page_id_);    // find leaf
-  auto node = reinterpret_cast< const BPlusTreePage *>(read_guard.GetData());
+void BPLUSTREE_TYPE::FindLeaf(const KeyType &key , Context &ctx, const Operation &op ){
+  WritePageGuard write_guard = bpm_->WritePage(root_page_id_);    // find leaf
+  ctx.write_nodes_.push_back(reinterpret_cast<BPlusTreePage*>(write_guard.GetDataMut()));
+  ctx.write_set_.push_back(std::move(write_guard));
+  auto node = reinterpret_cast< const BPlusTreePage *>(ctx.write_set_.back().GetData());
   while (!node->IsLeafPage()) {
-      auto v = reinterpret_cast< const InternalPage *>(read_guard.GetData()) -> Lookup(key, comparator_);
-      read_guard = bpm_->ReadPage(v);
-      node = reinterpret_cast<const  BPlusTreePage *>(read_guard.GetData());
+      auto v = reinterpret_cast< const InternalPage *>(ctx.write_set_.back().GetData()) -> Lookup(key, comparator_);
+      write_guard = bpm_->WritePage(v);
+      node = reinterpret_cast<const  BPlusTreePage *>(write_guard.GetData());
+      if(op == Operation::INSERT && node->GetSize() < node->GetMaxSize()){
+          ctx.write_set_.clear();
+      }else if(op == Operation::DELETE && node->GetSize() > node->GetMinSize()){
+          ctx.write_set_.clear();
+      }else{}
+      ctx.write_nodes_.push_back(reinterpret_cast<BPlusTreePage*>(write_guard.GetDataMut()));
+      ctx.write_set_.push_back(std::move(write_guard));
   }
-  return node->GetPageId();
 }
 
 /*****************************************************************************

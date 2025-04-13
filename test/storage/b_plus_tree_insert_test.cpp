@@ -115,10 +115,10 @@ TEST(BPlusTreeTests, InsertTest2) {
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid);
   }
-  std::cout << "/***********************************/" << std::endl;
-  // tree.Print(bpm);
-  std::cout << tree.DrawBPlusTree() << std::endl;
-  std::cout << "/***********************************/" << std::endl;
+  // std::cout << "/***********************************/" << std::endl;
+  // // tree.Print(bpm);
+  // std::cout << tree.DrawBPlusTree() << std::endl;
+  // std::cout << "/***********************************/" << std::endl;
   std::vector<RID> rids;
   for (auto key : keys) {
     rids.clear();
