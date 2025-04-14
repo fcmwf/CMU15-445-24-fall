@@ -16,6 +16,7 @@
 #include <functional>
 #include <future>  // NOLINT
 #include <thread>  // NOLINT
+#include <fcntl.h>
 
 #include "buffer/buffer_pool_manager.h"
 #include "gtest/gtest.h"
@@ -63,14 +64,33 @@ void InsertHelperSplit(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree
   GenericKey<8> index_key;
   RID rid;
 
+  std::string file_name = std::to_string(thread_itr)+"tree.txt";
+  // std::string log_name = std::to_string(thread_itr)+"log.txt";
+  {
+    std::ofstream outFile(file_name, std::ios::out | std::ios::trunc);
+    // 文件流会在离开作用域时自动关闭
+  }
+  std::ofstream outFile(file_name, std::ios::app);
+
+  // int fd = open(log_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  // dup2(fd, STDOUT_FILENO);
+
   for (auto key : keys) {
     if (static_cast<uint64_t>(key) % total_threads == thread_itr) {
       int64_t value = key & 0xFFFFFFFF;
       rid.Set(static_cast<int32_t>(key >> 32), value);
       index_key.SetFromInteger(key);
       tree->Insert(index_key, rid);
+      // outFile << "insert key: " << key << std::endl;
+      // if(key%10 == 0 || key%10 == 1){
+      //   outFile << "insert key: " << key << std::endl;
+      // }
+      // outFile << tree->DrawBPlusTree(); // 将内容追加到文件末尾
+      // outFile << "--------------------------------------------" << std::endl;
     }
   }
+
+  outFile.close();                 // 关闭文件
 }
 
 // helper function to delete
@@ -191,14 +211,20 @@ void InsertTest2Call() {
     // keys to Insert
     std::vector<int64_t> keys;
     int64_t scale_factor = 1000;
+    // int64_t scale_factor = 10;
     for (int64_t key = 1; key < scale_factor; key++) {
       keys.push_back(key);
     }
     LaunchParallelTest(2, InsertHelperSplit, &tree, keys, 2);
 
+    std::ofstream outFile("tree.txt");
+    outFile << tree.DrawBPlusTree();
+    outFile.close();
+
     std::vector<RID> rids;
     GenericKey<8> index_key;
     for (auto key : keys) {
+      std::cout << "query key: " << key << std::endl;
       rids.clear();
       index_key.SetFromInteger(key);
       tree.GetValue(index_key, &rids);
@@ -246,10 +272,18 @@ void DeleteTest1Call() {
     // sequential insert
     std::vector<int64_t> keys = {1, 2, 3, 4, 5};
     InsertHelper(&tree, keys);
-
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
+    // std::cout << tree.DrawBPlusTree() << std::endl;
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
     std::vector<int64_t> remove_keys = {1, 5, 3, 4};
     LaunchParallelTest(2, DeleteHelper, &tree, remove_keys);
-
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
+    // std::cout << tree.DrawBPlusTree() << std::endl;
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
     int64_t start_key = 2;
     int64_t current_key = start_key;
     int64_t size = 0;
@@ -290,10 +324,18 @@ void DeleteTest2Call() {
     // sequential insert
     std::vector<int64_t> keys = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     InsertHelper(&tree, keys);
-
+    std::cout << "----------------------------------------------------------------------------------------------------"
+              << std::endl;
+    std::cout << tree.DrawBPlusTree() << std::endl;
+    std::cout << "----------------------------------------------------------------------------------------------------"
+              << std::endl;
     std::vector<int64_t> remove_keys = {1, 4, 3, 2, 5, 6};
     LaunchParallelTest(2, DeleteHelperSplit, &tree, remove_keys, 2);
-
+    std::cout << "----------------------------------------------------------------------------------------------------"
+              << std::endl;
+    std::cout << tree.DrawBPlusTree() << std::endl;
+    std::cout << "----------------------------------------------------------------------------------------------------"
+              << std::endl;
     int64_t start_key = 7;
     int64_t current_key = start_key;
     int64_t size = 0;
@@ -443,19 +485,19 @@ void MixTest2Call() {
   }
 }
 
-TEST(BPlusTreeConcurrentTest,  InsertTest1) {  // NOLINT
-  InsertTest1Call();
-}
+// TEST(BPlusTreeConcurrentTest,  InsertTest1) {  // NOLINT
+//   InsertTest1Call();
+// }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_InsertTest2) {  // NOLINT
-  InsertTest2Call();
-}
+// TEST(BPlusTreeConcurrentTest, InsertTest2) {  // NOLINT
+//   InsertTest2Call();
+// }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest1) {  // NOLINT
+TEST(BPlusTreeConcurrentTest, DeleteTest1) {  // NOLINT
   DeleteTest1Call();
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest2) {  // NOLINT
+TEST(BPlusTreeConcurrentTest,  DeleteTest2) {  // NOLINT
   DeleteTest2Call();
 }
 

@@ -53,27 +53,16 @@ enum class PageParser{Borrow,Merge};
  */
 class Context {
  public:
-  // When you insert into / remove from the B+ tree, store the write guard of header page here.
-  // Remember to drop the header page guard and set it to nullopt when you want to unlock all.
-  std::optional<WritePageGuard> header_page_{std::nullopt};
-
-  // Save the root page id here so that it's easier to know if the current page is the root page.
-  page_id_t root_page_id_{INVALID_PAGE_ID};
-
   // Store the write guards of the pages that you're modifying here.
   std::deque<WritePageGuard> write_set_;
   // You may want to use this when getting value, but not necessary.
   std::deque<ReadPageGuard> read_set_;
 
-  std::deque<BPlusTreePage*> write_nodes_;  // node that locked and may be modified
-  std::deque<WritePageGuard> lock_set_;  // just need lock and we never use it
-  auto SetPageParent(page_id_t page_id, page_id_t parent_id) -> bool{
-    std::cout << "SetPageParent: " << page_id << " " << parent_id << std::endl;
-    for(auto &node: write_nodes_){
-      if(node->GetPageId()==page_id){
-        node->SetParentId(parent_id);
-        return true;
-      }
+  std::unordered_map<page_id_t, BPlusTreePage*> write_nodes_;  // node that locked and may be write
+  bool SetPageParent(page_id_t page_id, page_id_t parent_id) {
+    if(write_nodes_.count(page_id)){
+      write_nodes_[page_id]->SetParentId(parent_id);
+      return true;
     }
     return false;
   }
@@ -108,26 +97,26 @@ class BPlusTree {
   auto GetRootPageId() -> page_id_t;
   
   // helper function
-  void FindLeaf(const KeyType &key , Context &ctx, const Operation &mode ) ;
-  auto SplitLeafNode(LeafPage* old_node, Context &ctx) -> WritePageGuard;
-  auto SplitInternalNode(InternalPage* old_node,  Context &ctx) -> WritePageGuard;
-  void InsertLeaf2Parent(const KeyType &key, LeafPage * old_node, LeafPage * new_node, Context &ctx);
-  void InsertInternalPage2Parent(InternalPage* old_node, Context &ctx);
+  auto FindLeaf(const KeyType &key , Context &ctx, const Operation &mode ) -> page_id_t;
+  auto SplitLeafNode(page_id_t page_id, Context &ctx) -> page_id_t;
+  auto SplitInternalNode(page_id_t page_id,  Context &ctx) -> page_id_t;
+  void InsertLeaf2Parent(const KeyType &key, page_id_t old_page, page_id_t new_page, Context &ctx);
+  void InsertInternalPage2Parent(page_id_t page_id, Context &ctx);
 
   // Leaf process
-  void LeafMerge(page_id_t left_leaf, page_id_t right_leaf);
-  void LeafBorrow(page_id_t page_id, page_id_t sib_id, bool direct);
-  auto LeafGetSibling(page_id_t page_id) -> std::vector<std::tuple<page_id_t,bool,bool>>;
+  void LeafMerge(page_id_t left_leaf, page_id_t right_leaf, Context &ctx);
+  void LeafBorrow(page_id_t page_id, page_id_t sib_id, bool direct, Context &ctx);
+  auto LeafGetSibling(page_id_t page_id, Context &ctx) -> std::vector<std::tuple<page_id_t,bool,bool>>;
 
   // Internal Process
-  void InternalProcess(page_id_t page_id);
-  auto InternalGetSibling(page_id_t page_id, page_id_t parent_id) -> std::vector<std::tuple<page_id_t,bool,bool>>;
-  auto InternalMerge(page_id_t leaf_page, page_id_t right_page) -> page_id_t;
-  void InternalBorrow(page_id_t page_id, page_id_t sib_id, bool direct) ;
+  void InternalProcess(page_id_t page_id, Context &ctx);
+  auto InternalGetSibling(page_id_t page_id, Context &ctx) -> std::vector<std::tuple<page_id_t,bool,bool>>;
+  auto InternalMerge(page_id_t leaf_page, page_id_t right_page, Context &ctx) -> page_id_t;
+  void InternalBorrow(page_id_t page_id, page_id_t sib_id, bool direct, Context &ctx) ;
 
   auto SiblingParser(std::vector<std::tuple<page_id_t,bool,bool>> &sibling_list,
     const PageParser &parser) -> std::optional<std::tuple<page_id_t,bool>>;
-  auto GetMostLeftKey(const page_id_t &page) -> KeyType;
+  auto GetMostLeftKey(const page_id_t &page, Context &ctx) -> KeyType;
 
   bool IsRootPage(page_id_t page_id){ return page_id==root_page_id_; }
   void SetRootPage(page_id_t page_id){ root_page_id_ = page_id; }
@@ -167,7 +156,9 @@ class BPlusTree {
   int leaf_max_size_;
   int internal_max_size_;
   page_id_t header_page_id_;
+  
   page_id_t root_page_id_;
+  std::shared_mutex mutex_;
 };
 
 /**
