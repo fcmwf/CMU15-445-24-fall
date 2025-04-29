@@ -115,15 +115,15 @@ TEST(BPlusTreeTests, InsertTest2) {
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid);
   }
-  // std::cout << "/***********************************/" << std::endl;
-  // // tree.Print(bpm);
-  // std::cout << tree.DrawBPlusTree() << std::endl;
-  // std::cout << "/***********************************/" << std::endl;
+  std::cout << "/***********************************/" << std::endl;
+  // tree.Print(bpm);
+  std::cout << tree.DrawBPlusTree() << std::endl;
+  std::cout << "/***********************************/" << std::endl;
   std::vector<RID> rids;
   for (auto key : keys) {
     rids.clear();
     index_key.SetFromInteger(key);
-    // std::cout << "query key: " << index_key << std::endl;
+    std::cout << "query key: " << index_key << std::endl;
     tree.GetValue(index_key, &rids);
     EXPECT_EQ(rids.size(), 1);
 
@@ -134,6 +134,7 @@ TEST(BPlusTreeTests, InsertTest2) {
   int64_t start_key = 1;
   int64_t current_key = start_key;
   for (auto iter = tree.Begin(); iter != tree.End(); ++iter) {
+    std::cout << "key: " << current_key << std::endl;
     auto pair = *iter;
     auto location = pair.second;
     EXPECT_EQ(location.GetPageId(), 0);

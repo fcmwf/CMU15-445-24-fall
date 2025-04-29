@@ -22,8 +22,9 @@ namespace bustub {
 
 #define B_PLUS_TREE_LEAF_PAGE_TYPE BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>
 #define LEAF_PAGE_HEADER_SIZE 16
-#define LEAF_PAGE_SLOT_CNT ((BUSTUB_PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / (sizeof(KeyType) + sizeof(ValueType)))
-
+#define PAGE_ID_SIZE sizeof(page_id_t)
+#define LEAF_PAGE_SLOT_CNT ((BUSTUB_PAGE_SIZE - LEAF_PAGE_HEADER_SIZE - 2*PAGE_ID_SIZE) / (sizeof(KeyType) + sizeof(ValueType))) - 1
+        // page分配4096字节 如果按照 ((BUSTUB_PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / (sizeof(KeyType) + sizeof(ValueType))) == 255 算，根本分配不了这么多空间
 /**
  * Store indexed key and record id (record id = page id combined with slot id,
  * see `include/common/rid.h` for detailed implementation) together within leaf
@@ -63,23 +64,24 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   auto GetPrevPageId() const -> page_id_t;
   void SetPrevPageId(page_id_t prev_page_id);
   auto KeyAt(int index) const -> KeyType;
+  auto KeyIndex(const KeyType &key, const KeyComparator& comparator) const -> int;
   auto ValueAt(int index) const -> ValueType;
   auto Lookup(const KeyType& key, const KeyComparator& comparator) const -> std::optional<ValueType>;
   auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) -> bool;
   auto Remove(const KeyType &key, const KeyComparator &comparator) -> bool;
   void CopyLeafData(int index, B_PLUS_TREE_LEAF_PAGE_TYPE *other);
-  void NodePrint() const{
-    std::cout << "leaf " << GetPageId() << " content: " << std::endl;
+  void NodePrint(std::ostream & stream) const{
+    stream << "leaf " << GetPageId() << " content: " << std::endl;
     for(int i=0; i<GetSize(); i++){
-      std::cout << key_array_[i] << " ";
+      stream << key_array_[i] << " ";
     }
-    std::cout << std::endl;
+    stream << std::endl;
 
     for(int i=0; i<GetSize(); i++){
-      std::cout << rid_array_[i] << " ";
+      stream << rid_array_[i] << " ";
     }
-    std::cout << "next: " << GetNextPageId() << " prev: " << GetPrevPageId() <<  std::endl;
-    std::cout << "parent: " << GetParentId() << std::endl;
+    stream << "next: " << GetNextPageId() << " prev: " << GetPrevPageId() <<  std::endl;
+    stream << "parent: " << GetParentId() << std::endl;
   }
   /**
    * @brief For test only return a string representing all keys in

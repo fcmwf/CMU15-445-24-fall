@@ -65,23 +65,23 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   auto Lookup(const KeyType& key, const KeyComparator& comparator) const -> ValueType;
 
   void Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator);
-
+  void Insert_begin(const KeyType &key, const ValueType &value);
   void Insert_back(const KeyType &key, const ValueType &value);
 
   void CopyInternalData(int index, B_PLUS_TREE_INTERNAL_PAGE_TYPE *other);
 
   auto Remove(const ValueType &value) -> bool;
-  void NodePrint() const {
-    std::cout << "internal " << GetPageId() << " content: " << std::endl;
+  void NodePrint(std::ostream & stream) const {
+    stream << "internal " << GetPageId() << " content: " << std::endl;
     for(int i=1; i<GetSize(); i++){
-      std::cout << key_array_[i] << " ";
+      stream << key_array_[i] << " ";
     }
-    std::cout << std::endl;
+    stream << std::endl;
 
     for(int i=0; i<GetSize(); i++){
-      std::cout << page_id_array_[i] << " ";
+      stream << page_id_array_[i] << " ";
     }
-    std::cout << std::endl;
+    stream  << std::endl << "parent: " << GetParentId() << std::endl;
   }
   /**
    * @brief For test only, return a string representing all keys in

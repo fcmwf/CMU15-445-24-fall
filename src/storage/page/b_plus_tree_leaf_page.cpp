@@ -75,6 +75,16 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
 }
 
 INDEX_TEMPLATE_ARGUMENTS 
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyIndex(const KeyType &key, const KeyComparator& comparator) const -> int {
+  for(int i=0; i<GetSize(); i++){
+    if(comparator(key_array_[i], key) == 0){
+      return i;
+    }
+  }
+  return -1;
+}
+
+INDEX_TEMPLATE_ARGUMENTS 
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::ValueAt(int index) const -> ValueType {
   BUSTUB_ASSERT(index >= 0 && index < GetSize(), "value index arguement error");
   return rid_array_[index];
@@ -93,6 +103,8 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType& key, const KeyComparator&
 
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) -> bool{
+  // std::string temp_log_name = "temp.log";
+  // std::ofstream temp_log(temp_log_name, std::ios::out | std::ios::app);
   auto target = std::lower_bound(key_array_, key_array_ + GetSize(), key, [&comparator](const KeyType &array_key, auto k) {
     return comparator(array_key, k) < 0;
   });
@@ -104,8 +116,18 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &val
   }
   if (comparator(key, *target) == 0) return false;
   auto d = target - key_array_;
+
+  // temp_log << "insert key: " << key << std::endl;
+  // temp_log << "insert value: " << value ;
+  // temp_log << "insert pos: " << d << std::endl;
+  // temp_log << "max size: " << GetMaxSize() << std::endl;
+  // temp_log << "cur size: " << GetSize() << std::endl;
+  // temp_log << "LEAF_PAGE_SLOT_CNT: " << LEAF_PAGE_SLOT_CNT << std::endl;
+
+
   std::move_backward(target, key_array_ + GetSize(), key_array_ + GetSize() + 1);
   std::move_backward(rid_array_ + d, rid_array_ + GetSize(), rid_array_ + GetSize() + 1);
+
   key_array_[d] = key;
   rid_array_[d] = value;
   ChangeSizeBy(1);
@@ -121,6 +143,7 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, const KeyComparator 
     return false;
   }
   std::move(value_pos + 1, key_array_ + GetSize(), value_pos);
+  std::move(rid_array_ + (value_pos - key_array_) + 1, rid_array_ + GetSize(), rid_array_ + (value_pos - key_array_));
   ChangeSizeBy(-1);
   return true;
 }

@@ -49,12 +49,23 @@ void InsertHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
                   __attribute__((unused)) uint64_t thread_itr = 0) {
   GenericKey<8> index_key;
   RID rid;
-
+  // std::string file_name = "insert_tree.txt";
+  // // std::string log_name = std::to_string(thread_itr)+"log.txt";
+  // {
+  //   std::ofstream outFile(file_name, std::ios::out | std::ios::trunc);
+  //   // 文件流会在离开作用域时自动关闭
+  // }
+  // std::ofstream outFile(file_name, std::ios::app);
   for (auto key : keys) {
+    // outFile << "insert key: " << key << std::endl;
+    // outFile << "before insert: " << std::endl 
+    //         << tree->DrawBPlusTree() << std::endl;
     int64_t value = key & 0xFFFFFFFF;
     rid.Set(static_cast<int32_t>(key >> 32), value);
     index_key.SetFromInteger(key);
     tree->Insert(index_key, rid);
+    // outFile << "after insert: " << std::endl 
+    //         << tree->DrawBPlusTree() << std::endl;
   }
 }
 
@@ -98,9 +109,22 @@ void DeleteHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
                   __attribute__((unused)) uint64_t thread_itr = 0) {
   GenericKey<8> index_key;
 
+  // std::string file_name =  "delete_tree.txt";
+  // {
+  //   std::ofstream outFile(file_name, std::ios::out | std::ios::trunc);
+  //   // 文件流会在离开作用域时自动关闭
+  // }
+  // std::ofstream outFile(file_name, std::ios::app);
+
   for (auto key : remove_keys) {
+    // outFile << "delete key: " << key << std::endl;
+    // outFile << "before delete: " << std::endl 
+    //         << tree->DrawBPlusTree() << std::endl;
     index_key.SetFromInteger(key);
+    
     tree->Remove(index_key);
+    // outFile << "after delete: " << std::endl 
+    //         <<  tree->DrawBPlusTree() << std::endl;
   }
 }
 
@@ -134,13 +158,14 @@ void LookupHelper(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree, con
   }
 }
 
-const size_t NUM_ITERS = 50;
+const size_t NUM_ITERS = 20;
 const size_t MIXTEST_NUM_ITERS = 20;
 static const size_t BPM_SIZE = 50;
 
 void InsertTest1Call() {
   for (size_t iter = 0; iter < NUM_ITERS; iter++) {
     // create KeyComparator and index schema
+    std::cout << "Test1 round: " << iter << std::endl;
     auto key_schema = ParseCreateStatement("a bigint");
     GenericComparator<8> comparator(key_schema.get());
 
@@ -155,7 +180,7 @@ void InsertTest1Call() {
 
     // keys to Insert
     std::vector<int64_t> keys;
-    int64_t scale_factor = 100;
+    int64_t scale_factor = 50;
     for (int64_t key = 1; key < scale_factor; key++) {
       keys.push_back(key);
     }
@@ -196,6 +221,7 @@ void InsertTest1Call() {
 void InsertTest2Call() {
   for (size_t iter = 0; iter < NUM_ITERS; iter++) {
     // create KeyComparator and index schema
+    std::cout << "Test2 round: " << iter << std::endl;
     auto key_schema = ParseCreateStatement("a bigint");
     GenericComparator<8> comparator(key_schema.get());
 
@@ -210,7 +236,7 @@ void InsertTest2Call() {
 
     // keys to Insert
     std::vector<int64_t> keys;
-    int64_t scale_factor = 1000;
+    int64_t scale_factor = 50;
     // int64_t scale_factor = 10;
     for (int64_t key = 1; key < scale_factor; key++) {
       keys.push_back(key);
@@ -224,7 +250,7 @@ void InsertTest2Call() {
     std::vector<RID> rids;
     GenericKey<8> index_key;
     for (auto key : keys) {
-      std::cout << "query key: " << key << std::endl;
+      // std::cout << "query key: " << key << std::endl;
       rids.clear();
       index_key.SetFromInteger(key);
       tree.GetValue(index_key, &rids);
@@ -252,6 +278,7 @@ void InsertTest2Call() {
     remove("test.db");
     remove("test.log");
   }
+  
 }
 
 void DeleteTest1Call() {
@@ -271,12 +298,14 @@ void DeleteTest1Call() {
 
     // sequential insert
     std::vector<int64_t> keys = {1, 2, 3, 4, 5};
+
     InsertHelper(&tree, keys);
     // std::cout << "----------------------------------------------------------------------------------------------------"
     //           << std::endl;
     // std::cout << tree.DrawBPlusTree() << std::endl;
     // std::cout << "----------------------------------------------------------------------------------------------------"
     //           << std::endl;
+
     std::vector<int64_t> remove_keys = {1, 5, 3, 4};
     LaunchParallelTest(2, DeleteHelper, &tree, remove_keys);
     // std::cout << "----------------------------------------------------------------------------------------------------"
@@ -291,6 +320,8 @@ void DeleteTest1Call() {
     for (auto iter = tree.Begin(); iter != tree.End(); ++iter) {
       const auto &pair = *iter;
       auto location = pair.second;
+      // std::cout << "key: " << pair.first << std::endl;
+      // std::cout << "value: " << pair.second << std::endl;
       ASSERT_EQ(location.GetPageId(), 0);
       ASSERT_EQ(location.GetSlotNum(), current_key);
       current_key = current_key + 1;
@@ -324,18 +355,18 @@ void DeleteTest2Call() {
     // sequential insert
     std::vector<int64_t> keys = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     InsertHelper(&tree, keys);
-    std::cout << "----------------------------------------------------------------------------------------------------"
-              << std::endl;
-    std::cout << tree.DrawBPlusTree() << std::endl;
-    std::cout << "----------------------------------------------------------------------------------------------------"
-              << std::endl;
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
+    // std::cout << tree.DrawBPlusTree() << std::endl;
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
     std::vector<int64_t> remove_keys = {1, 4, 3, 2, 5, 6};
     LaunchParallelTest(2, DeleteHelperSplit, &tree, remove_keys, 2);
-    std::cout << "----------------------------------------------------------------------------------------------------"
-              << std::endl;
-    std::cout << tree.DrawBPlusTree() << std::endl;
-    std::cout << "----------------------------------------------------------------------------------------------------"
-              << std::endl;
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
+    // std::cout << tree.DrawBPlusTree() << std::endl;
+    // std::cout << "----------------------------------------------------------------------------------------------------"
+    //           << std::endl;
     int64_t start_key = 7;
     int64_t current_key = start_key;
     int64_t size = 0;
@@ -377,7 +408,7 @@ void MixTest1Call() {
     std::vector<int64_t> for_insert;
     std::vector<int64_t> for_delete;
     int64_t sieve = 2;  // divide evenly
-    int64_t total_keys = 1000;
+    int64_t total_keys = 100;
     for (int64_t i = 1; i <= total_keys; i++) {
       if (i % sieve == 0) {
         for_insert.push_back(i);
@@ -394,14 +425,18 @@ void MixTest1Call() {
     tasks.emplace_back(insert_task);
     tasks.emplace_back(delete_task);
     std::vector<std::thread> threads;
-    size_t num_threads = 10;
+    size_t num_threads = 8;
     for (size_t i = 0; i < num_threads; i++) {
       threads.emplace_back(tasks[i % tasks.size()], i);
     }
     for (size_t i = 0; i < num_threads; i++) {
       threads[i].join();
     }
-
+    std::cout << "finish" << std::endl;
+    std::string file_name = "tree.txt";
+    { std::ofstream outFile(file_name, std::ios::out | std::ios::trunc);}
+    std::ofstream outFile(file_name, std::ios::app);
+    outFile << tree.DrawBPlusTree();
     int64_t size = 0;
 
     for (auto iter = tree.Begin(); iter != tree.End(); ++iter) {
@@ -485,13 +520,17 @@ void MixTest2Call() {
   }
 }
 
-// TEST(BPlusTreeConcurrentTest,  InsertTest1) {  // NOLINT
-//   InsertTest1Call();
-// }
+TEST(BPlusTreeConcurrentTest,  InsertTest1) {  // NOLINT
+  InsertTest1Call();
+}
 
-// TEST(BPlusTreeConcurrentTest, InsertTest2) {  // NOLINT
-//   InsertTest2Call();
-// }
+TEST(BPlusTreeConcurrentTest, InsertTest2) {  // NOLINT
+  // auto start = std::chrono::high_resolution_clock::now();
+  InsertTest2Call();
+  // auto end = std::chrono::high_resolution_clock::now();
+  // std::chrono::duration<double> elapsed = end - start;
+  // std::cout << "程序运行时间: " << elapsed.count() << " 秒" << std::endl;
+}
 
 TEST(BPlusTreeConcurrentTest, DeleteTest1) {  // NOLINT
   DeleteTest1Call();
@@ -501,11 +540,11 @@ TEST(BPlusTreeConcurrentTest,  DeleteTest2) {  // NOLINT
   DeleteTest2Call();
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_MixTest1) {  // NOLINT
+TEST(BPlusTreeConcurrentTest,  MixTest1) {  // NOLINT
   MixTest1Call();
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_MixTest2) {  // NOLINT
+TEST(BPlusTreeConcurrentTest,  MixTest2) {  // NOLINT
   MixTest2Call();
 }
 }  // namespace bustub

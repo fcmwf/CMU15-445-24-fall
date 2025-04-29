@@ -129,6 +129,15 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(const KeyType &key, const ValueType 
 }
 
 INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert_begin(const KeyType &key, const ValueType &value ) {
+  std::move_backward(key_array_, key_array_ + GetSize(), key_array_ + GetSize() + 1);
+  std::move_backward(page_id_array_, page_id_array_+GetSize(), page_id_array_ + GetSize() + 1);
+  SetKeyAt(1,key);
+  SetValueAt(0,value);
+  ChangeSizeBy(1);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert_back(const KeyType &key, const ValueType &value){
   key_array_[GetSize()] = key;
   page_id_array_[GetSize()] = value;

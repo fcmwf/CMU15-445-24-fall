@@ -65,8 +65,9 @@ class Context {
       return true;
     }
     return false;
-  }
+  } 
 };
+
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
 enum class Operation {SEARCH, INSERT, DELETE};
@@ -159,6 +160,10 @@ class BPlusTree {
   
   page_id_t root_page_id_;
   std::shared_mutex mutex_;
+
+  std::ofstream insert_log;
+  std::ofstream delete_log;
+  std::ofstream temp_log;
 };
 
 /**
