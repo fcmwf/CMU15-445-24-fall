@@ -37,7 +37,9 @@ class Column {
    * @param type type of the column
    */
   Column(std::string column_name, TypeId type)
-      : column_name_(std::move(column_name)), column_type_(type), length_(TypeSize(type)) {
+      : column_name_(std::move(column_name)), 
+        column_type_(type), 
+        length_(TypeSize(type)) {
     BUSTUB_ASSERT(type != TypeId::VARCHAR, "Wrong constructor for VARCHAR type.");
     BUSTUB_ASSERT(type != TypeId::VECTOR, "Wrong constructor for VECTOR type.");
   }
@@ -50,7 +52,9 @@ class Column {
    * @param expr expression used to create this column
    */
   Column(std::string column_name, TypeId type, uint32_t length)
-      : column_name_(std::move(column_name)), column_type_(type), length_(TypeSize(type, length)) {
+      : column_name_(std::move(column_name)), 
+        column_type_(type), 
+        length_(TypeSize(type, length)) {
     BUSTUB_ASSERT(type == TypeId::VARCHAR || type == TypeId::VECTOR, "Wrong constructor for fixed-size type.");
   }
 

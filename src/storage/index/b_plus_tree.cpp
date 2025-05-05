@@ -37,7 +37,7 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
         std::ofstream ofs(insert_log_name, std::ios::out | std::ios::trunc);
         std::ofstream ofs2(delete_log_name, std::ios::out | std::ios::trunc);
         std::ofstream ofs3(temp_log_name, std::ios::out | std::ios::trunc);
-    }
+      }
       insert_log.open(insert_log_name, std::ios::out | std::ios::app);
       delete_log.open(delete_log_name, std::ios::out | std::ios::app);
       temp_log.open(temp_log_name, std::ios::out | std::ios::app);
@@ -386,9 +386,9 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key) {
   }
 
   if(GetRootPageId()==leaf_node->GetPageId()){   // Should I do this? Two test have different answer...
-    // if(leaf_node->GetSize()==0){
-    //   SetRootPage(INVALID_PAGE_ID);
-    // }
+    if(leaf_node->GetSize()==0){
+      SetRootPage(INVALID_PAGE_ID);
+    }
     return;
   }
   if (leaf_node->GetSize() >= leaf_node->GetMinSize()) { 

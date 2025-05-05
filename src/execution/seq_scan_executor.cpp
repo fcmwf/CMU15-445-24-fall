@@ -21,11 +21,27 @@ namespace bustub {
  * @param plan The sequential scan plan to be executed
  */
 SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan) : AbstractExecutor(exec_ctx) {
-  UNIMPLEMENTED("TODO(P3): Add implementation.");
+  plan_ = plan;
 }
 
 /** Initialize the sequential scan */
-void SeqScanExecutor::Init() { UNIMPLEMENTED("TODO(P3): Add implementation."); }
+void SeqScanExecutor::Init() {
+  auto table_info = GetExecutorContext()->GetCatalog()->GetTable(plan_->GetTableOid());
+  auto lock_mode = LockManager::LockMode::INTENTION_SHARED;
+  if (GetExecutorContext()->IsDelete())
+    lock_mode = LockManager::LockMode::INTENTION_EXCLUSIVE;
+  try {
+    if (exec_ctx_->GetTransaction()->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+      exec_ctx_->GetLockManager()->LockTable(GetExecutorContext()->GetTransaction(),
+                                            lock_mode, 
+                                            table_info->oid_);
+    }
+    iter_.emplace(table_info->table_->MakeEagerIterator());
+  } catch (const TransactionAbortException &e) {
+    LOG_ERROR("TransactionAbortException: %s", e.what());
+    throw ExecutionException("lock failed");
+  }
+}
 
 /**
  * Yield the next tuple from the sequential scan.
@@ -33,6 +49,71 @@ void SeqScanExecutor::Init() { UNIMPLEMENTED("TODO(P3): Add implementation."); }
  * @param[out] rid The next tuple RID produced by the scan
  * @return `true` if a tuple was produced, `false` if there are no more tuples
  */
-auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool { UNIMPLEMENTED("TODO(P3): Add implementation."); }
+auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
+  // 加锁，不满足的解锁
+  auto lock_mode = LockManager::LockMode::SHARED;
+  if (GetExecutorContext()->IsDelete()) {  // 假设已实现GetIsDelete
+    lock_mode = LockManager::LockMode::EXCLUSIVE;
+  }
+  auto table_info = GetExecutorContext()->GetCatalog()->GetTable(plan_->GetTableOid());
+
+  while (!iter_->IsEnd()) {
+    if (iter_->GetTuple().first.is_deleted_) {
+      ++(*iter_);
+      continue;
+    }
+
+    try {
+      bool res = true;
+      if (exec_ctx_->GetTransaction()->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED ||
+          lock_mode != LockManager::LockMode::SHARED){
+        res = exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(),
+                                                  lock_mode,
+                                                  table_info->oid_,
+                                                  iter_->GetRID());
+      }
+
+      if (res) {
+        if (plan_->filter_predicate_ != nullptr) {
+          auto t = iter_->GetTuple().second;
+          auto value = plan_->filter_predicate_->Evaluate(&t, table_info->schema_);
+          if (!value.IsNull() && value.GetAs<bool>()) {
+            *tuple = iter_->GetTuple().second;
+            *rid = iter_->GetRID();
+//							UnlockRowIfRequired(exec_ctx_->GetTransaction(), table_info->oid_, iter_->GetRID());
+            ++(*iter_);
+            return true;
+          } else {
+            if (!exec_ctx_->GetLockManager()->UnlockRow(exec_ctx_->GetTransaction(), 
+                                                        table_info->oid_,
+                                                        iter_->GetRID(), 
+                                                        true)){
+              LOG_ERROR("TransactionAbortException failed");
+              throw ExecutionException("SeqScan Executor Get Table ULock Failed");
+            }
+            ++(*iter_);
+          }
+        } else {
+          *tuple = iter_->GetTuple().second;
+          *rid = iter_->GetRID();
+//						UnlockRowIfRequired(exec_ctx_->GetTransaction(), table_info->oid_, iter_->GetRID());
+          ++(*iter_);
+
+          return true;
+        }
+      } else {
+        throw ExecutionException("SeqScan Executor Get Table Lock Failed");
+      }
+
+    } catch (TransactionAbortException &e) {
+      LOG_ERROR("TransactionAbortException: %s", e.GetInfo().c_str());
+      throw ExecutionException("SeqScan Executor TransactionAbortException: " + std::string(e.what()));
+    } catch (...) {
+
+      throw ExecutionException("SeqScan Executor Unknown Exception");
+    }
+  }
+  return false;
+}
 
 }  // namespace bustub

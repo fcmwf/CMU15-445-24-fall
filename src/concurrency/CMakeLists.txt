@@ -1,6 +1,7 @@
 add_library(
   bustub_concurrency
   OBJECT
+  lock_manager.cpp
   transaction_manager.cpp
   transaction_manager_impl.cpp
   watermark.cpp)
