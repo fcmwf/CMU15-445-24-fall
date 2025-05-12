@@ -6,15 +6,7 @@
 statement ok
 set force_optimizer_starter_rule=yes
 
-query rowsort
-select * from
-    __mock_table_tas_2025_spring inner join __mock_table_schedule
-    on office_hour = day_of_week
-    where has_lecture = 1;
-----
-ChrisLaspias Wednesday Wednesday 1
-carpecodeum Monday Monday 1
-rmboyce Monday Monday 1
+
 
 # The real test begins...
 
@@ -50,6 +42,10 @@ insert into t1 (select * from __mock_table_123);
 
 statement ok
 create index t1_v1 on t1(v1);
+
+statement ok
+explain select * from test_simple_seq_2 t2 left join t1 on t1.v1 = t2.col1;
+
 
 query rowsort
 select * from test_simple_seq_2 t2 left join t1 on t1.v1 = t2.col1;

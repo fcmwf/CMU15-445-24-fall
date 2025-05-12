@@ -130,10 +130,10 @@ auto Optimizer::OptimizeSeqScanAsIndexScan(const bustub::AbstractPlanNodeRef &pl
   filter_predicate = nullptr;
   auto Com_expr = dynamic_cast<const ComparisonExpression*>(expr);
   if(Com_expr!=nullptr && ParserEqualExpression(Com_expr,keys,filter_predicate)){
-    std::cout << "column and value" << std::endl;
-    std::cout << dynamic_cast<const ColumnValueExpression *>(filter_predicate.get())->ToString() << std::endl;
-    std::cout << dynamic_cast<const ConstantValueExpression *>(keys[0].get())->ToString() << std::endl;
-    std::cout << optimized_plan->output_schema_->ToString() << std::endl;
+    // std::cout << "column and value" << std::endl;
+    // std::cout << dynamic_cast<const ColumnValueExpression *>(filter_predicate.get())->ToString() << std::endl;
+    // std::cout << dynamic_cast<const ConstantValueExpression *>(keys[0].get())->ToString() << std::endl;
+    // std::cout << optimized_plan->output_schema_->ToString() << std::endl;
     auto index_column_id = dynamic_cast<const ColumnValueExpression *>(filter_predicate.get())->GetColIdx();
     std::vector<std::shared_ptr<IndexInfo>> indexes = catalog_.GetTableIndexes(seq_plan.table_name_);
     bool col_is_index = std::find_if(indexes.begin(), indexes.end(),

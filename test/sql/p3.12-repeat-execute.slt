@@ -4,6 +4,14 @@
 statement ok
 create table t1(v1 int, v2 varchar(128));
 
+statement ok
+create table t10(v1 int);
+
+query
+insert into t10 values (2);
+----
+1
+
 query
 insert into t1 values (0, '🥰'), (1, '🥰🥰');
 ----
@@ -22,6 +30,21 @@ select * from __mock_table_123, t1;
 3 1 🥰🥰
 
 # SimpleAgg as the right child
+
+statement ok
+explain select * from __mock_table_123, (select count(*) as cnt from t1);
+
+#query 
+#select count(*) as cnt from t1
+#----
+#2
+
+query
+select * from __mock_table_123
+----
+1
+2
+3
 
 query rowsort +ensure:nlj_init_check
 select * from __mock_table_123, (select count(*) as cnt from t1);
@@ -46,6 +69,21 @@ select * from __mock_table_123, (select distinct v2 from t1);
 
 statement ok
 create index t1v1 on t1(v1);
+
+query
+select * from __mock_table_123;
+----
+1
+2
+3
+
+query
+select * from t1 where v1 = 1;
+----
+1 🥰🥰
+
+statement ok
+explain select * from __mock_table_123, (select * from t1 where v1 = 1);
 
 query rowsort +ensure:nlj_init_check
 select * from __mock_table_123, (select * from t1 where v1 = 1);

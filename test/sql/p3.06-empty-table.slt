@@ -20,6 +20,7 @@ delete from t1;
 statement ok
 create index t1v1 on t1(v1);
 
+
 # Index Scan
 query
 select * from t1 where v1 = 1;

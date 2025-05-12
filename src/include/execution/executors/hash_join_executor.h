@@ -18,6 +18,7 @@
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/hash_join_plan.h"
 #include "storage/table/tuple.h"
+#include "common/util/hash_util.h"
 
 namespace bustub {
 
@@ -38,7 +39,13 @@ class HashJoinExecutor : public AbstractExecutor {
 
  private:
   /** The HashJoin plan node to be executed. */
-  const HashJoinPlanNode *plan_;
+    const HashJoinPlanNode *plan_;
+    std::unique_ptr<AbstractExecutor> left_child;
+    std::unique_ptr<AbstractExecutor> right_child;
+    std::unordered_map<hash_t, std::vector<Tuple>> ht_{};
+    int idx{-1};
+    std::unordered_map<hash_t, std::vector<Tuple>::iterator> ht_iter_{};
+    Tuple left_tuple;
 };
 
 }  // namespace bustub

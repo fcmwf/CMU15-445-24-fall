@@ -27,8 +27,23 @@ IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanP
       iter_{tree_->GetBeginIterator()} {}
 
 void IndexScanExecutor::Init() {
-    tableInfo = exec_ctx_->GetCatalog()->GetTable(exec_ctx_->GetCatalog()->GetIndex(
-      plan_->GetIndexOid())->table_name_);
+  tableInfo = GetExecutorContext()->GetCatalog()->GetTable(plan_->table_oid_);
+  auto lock_mode = LockManager::LockMode::INTENTION_SHARED;
+  if (GetExecutorContext()->IsDelete())
+    lock_mode = LockManager::LockMode::INTENTION_EXCLUSIVE;
+  try {
+    if (exec_ctx_->GetTransaction()->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
+      exec_ctx_->GetLockManager()->LockTable(GetExecutorContext()->GetTransaction(),
+                                            lock_mode, 
+                                            tableInfo->oid_);
+    }
+  } catch (const TransactionAbortException &e) {
+    LOG_ERROR("TransactionAbortException: %s", e.what());
+    throw ExecutionException("lock failed");
+  }
+  is_end_ = false;
+  retrive_flag_ = false;
+  iter_ = tree_->GetBeginIterator();
 }
 
 auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
@@ -68,7 +83,8 @@ auto IndexScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
             return false;
        }
     }
-    if (!iter_.IsEnd()) {
+    if (!iter_.IsEnd()) {      // range scan
+      // std::cout << "iter_ is not end" << std::endl;
         const auto pair = *iter_;
         auto res = tableInfo->table_->GetTuple(pair.second);
         *rid = pair.second;

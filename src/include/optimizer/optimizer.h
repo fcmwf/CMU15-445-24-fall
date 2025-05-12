@@ -69,6 +69,30 @@ class Optimizer {
 
   auto EstimatedCardinality(const std::string &table_name) -> std::optional<size_t>;
 
+  std::string PlanTypeToString(PlanType type) {
+  switch (type) {
+    case PlanType::SeqScan: return "SeqScan";
+    case PlanType::IndexScan: return "IndexScan";
+    case PlanType::Insert: return "Insert";
+    case PlanType::Update: return "Update";
+    case PlanType::Delete: return "Delete";
+    case PlanType::Aggregation: return "Aggregation";
+    case PlanType::Limit: return "Limit";
+    case PlanType::NestedLoopJoin: return "NestedLoopJoin";
+    case PlanType::NestedIndexJoin: return "NestedIndexJoin";
+    case PlanType::HashJoin: return "HashJoin";
+    case PlanType::Filter: return "Filter";
+    case PlanType::Values: return "Values";
+    case PlanType::Projection: return "Projection";
+    case PlanType::Sort: return "Sort";
+    case PlanType::TopN: return "TopN";
+    case PlanType::TopNPerGroup: return "TopNPerGroup";
+    case PlanType::MockScan: return "MockScan";
+    case PlanType::InitCheck: return "InitCheck";
+    case PlanType::Window: return "Window";
+    default: return "Unknown PlanType";
+  }
+}
   /** Catalog will be used during the planning process. USERS SHOULD ENSURE IT OUTLIVES
    * OPTIMIZER, otherwise it's a dangling reference.
    */

@@ -599,6 +599,9 @@ insert into temp_4 values
     (34, 1, 1443, 41478),
     (35, 2, 7564, 14242);
 
+statement ok
+explain select t1.colA from temp_1 t1 inner join temp_4 t4 on t1.colA = t4.colA and t1.colB = t4.colB and t1.colC = t4.colC and t1.colD = t4.colD;
+
 query rowsort +ensure:hash_join_no_filter
 select t1.colA from temp_1 t1 inner join temp_4 t4 on t1.colA = t4.colA and t1.colB = t4.colB and t1.colC = t4.colC and t1.colD = t4.colD;
 ----

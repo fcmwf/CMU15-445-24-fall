@@ -69,6 +69,9 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   // Declaration of context instance. Using the Context is not necessary but advised.
   Context ctx;
   std::shared_lock<std::shared_mutex> lock(mutex_); 
+  if(IsEmpty()) {
+    return false;
+  }
   ReadPageGuard read_page_guard;
   read_page_guard = bpm_->ReadPage(root_page_id_);
   auto node = reinterpret_cast< const BPlusTreePage *>(read_page_guard.GetData());

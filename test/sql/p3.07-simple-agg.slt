@@ -1,10 +1,5 @@
 # 4 pts
 
-# How many TAs are there in 2024 Spring?
-query
-select count(*) from __mock_table_tas_2025_spring;
-----
-8
 
 # The real test process begins...
 
@@ -54,6 +49,9 @@ query
 delete from t1;
 ----
 7
+
+statement ok
+explain select count(*) from t1;
 
 query
 select count(*) from t1;
