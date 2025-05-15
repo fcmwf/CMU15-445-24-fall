@@ -33,14 +33,14 @@ using SortEntry = std::pair<SortKey, Tuple>;
 class TupleComparator {
  public:
   explicit TupleComparator(std::vector<OrderBy> order_bys);
-
-  auto operator()(const SortEntry &entry_a, const SortEntry &entry_b) const -> bool;
-
+  auto GenerateSortKey(const Tuple &tuple) const -> SortKey;
+  auto operator()(const Tuple &tuple_a, const Tuple &tuple_b) const -> bool;
+  void SetSchema(const Schema &schema) { schema_ = schema; }
  private:
   std::vector<OrderBy> order_bys_;
+  Schema schema_;
 };
 
-auto GenerateSortKey(const Tuple &tuple, const std::vector<OrderBy> &order_bys, const Schema &schema) -> SortKey;
 
 /**
  * Above are all you need for P3.

@@ -117,7 +117,6 @@ struct AggregateValue {
   /** The aggregate values */
   std::vector<Value> aggregates_;
 };
-
 }  // namespace bustub
 
 namespace std {

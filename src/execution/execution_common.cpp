@@ -17,21 +17,58 @@
 #include "concurrency/transaction_manager.h"
 #include "fmt/core.h"
 #include "storage/table/table_heap.h"
+#include "execution/expressions/column_value_expression.h"
 
 namespace bustub {
 
-TupleComparator::TupleComparator(std::vector<OrderBy> order_bys) : order_bys_(std::move(order_bys)) {}
+TupleComparator::TupleComparator(std::vector<OrderBy> order_bys) : order_bys_(std::move(order_bys)), schema_({}) {}
 
 /** TODO(P3): Implement the comparison method */
-auto TupleComparator::operator()(const SortEntry &entry_a, const SortEntry &entry_b) const -> bool { return false; }
+auto TupleComparator::operator()(const Tuple &tuple_a, const Tuple &tuple_b) const -> bool {   
+    // return true if type==asc && a < b. 
+    //             Or type==desc && a > b.
+    auto entry_a = GenerateSortKey(tuple_a);
+    auto entry_b = GenerateSortKey(tuple_b);
+    BUSTUB_ASSERT(entry_a.size() == entry_b.size() && entry_a.size() == order_bys_.size(),
+                  "The size of sort key and order by should be the same.");
+    for (size_t i = 0; i < order_bys_.size(); i++) {
+        BUSTUB_ASSERT(entry_a[i].GetTypeId() == entry_b[i].GetTypeId(),
+                      "The type of sort key should be the same.");
+        if(entry_a[i].CompareEquals(entry_b[i]) == CmpBool::CmpTrue) {
+            continue;
+        }
+        CmpBool cmp;
+        switch(order_bys_[i].first){
+            case OrderByType::DEFAULT:
+            case OrderByType::ASC:
+                cmp = entry_a[i].CompareLessThan(entry_b[i]);
+                BUSTUB_ASSERT(cmp != CmpBool::CmpNull, "The comparison should not be null.");
+                return cmp == CmpBool::CmpTrue;
+                break;
+            case OrderByType::DESC:
+                cmp = entry_a[i].CompareGreaterThan(entry_b[i]);
+                BUSTUB_ASSERT(cmp != CmpBool::CmpNull, "The comparison should not be null.");
+                return cmp == CmpBool::CmpTrue;
+                break;
+            default:
+                throw  Exception("Invalid order by type.");
+        }
+    }
+    return true;
+}
 
 /**
  * Generate sort key for a tuple based on the order by expressions.
  *
  * TODO(P3): Implement this method.
  */
-auto GenerateSortKey(const Tuple &tuple, const std::vector<OrderBy> &order_bys, const Schema &schema) -> SortKey {
-  return {};
+auto TupleComparator::GenerateSortKey(const Tuple &tuple) const -> SortKey {
+  SortKey sort_key{};
+  for(auto& col: order_bys_) {
+    auto value = col.second->Evaluate(&tuple, schema_);
+    sort_key.push_back(value);
+  }
+  return sort_key;
 }
 
 /**

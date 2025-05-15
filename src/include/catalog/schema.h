@@ -28,6 +28,7 @@ using SchemaRef = std::shared_ptr<const Schema>;
 
 class Schema {
  public:
+
   explicit Schema(const std::vector<Column> &columns);
 
   static auto CopySchema(const Schema *from, const std::vector<uint32_t> &attrs) -> Schema {

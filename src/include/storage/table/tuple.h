@@ -90,8 +90,10 @@ class Tuple {
   // Get the address of this tuple in the table's backing store
   inline auto GetData() const -> const char * { return data_.data(); }
 
+  inline auto GetDataMut() -> char * { return data_.data(); }
   // Get length of the tuple, including varchar length
   inline auto GetLength() const -> uint32_t { return data_.size(); }
+
 
   auto GetValue(const Schema *schema, uint32_t column_idx) const -> Value;
 
