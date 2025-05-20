@@ -36,6 +36,8 @@ class SeqScanExecutor : public AbstractExecutor {
  private:
   /** The sequential scan plan node to be executed */
   const SeqScanPlanNode *plan_;
-  std::optional<TableIterator> iter_;
+  TableIterator iter_;
+  size_t cursor_{0};
+  std::vector<std::pair<Tuple, RID>> vec_;
 };
 }  // namespace bustub

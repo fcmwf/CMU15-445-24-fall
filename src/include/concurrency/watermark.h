@@ -12,7 +12,8 @@
 
 #pragma once
 
-#include <unordered_map>
+// #include <unordered_map>
+#include <set>
 
 #include "concurrency/transaction.h"
 #include "storage/table/tuple.h"
@@ -46,7 +47,7 @@ class Watermark {
 
   timestamp_t watermark_;
 
-  std::unordered_map<timestamp_t, int> current_reads_;
+  std::multiset<timestamp_t> current_reads_;   
 };
 
 };  // namespace bustub

@@ -10,6 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "execution/execution_common.h"
+#include "concurrency/transaction_manager.h"
 #include "execution/executors/seq_scan_executor.h"
 #include "common/macros.h"
 
@@ -20,27 +22,40 @@ namespace bustub {
  * @param exec_ctx The executor context
  * @param plan The sequential scan plan to be executed
  */
-SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan) : AbstractExecutor(exec_ctx) {
-  plan_ = plan;
-}
+SeqScanExecutor::SeqScanExecutor(ExecutorContext *exec_ctx, const SeqScanPlanNode *plan)
+    : AbstractExecutor(exec_ctx),
+      plan_(plan),
+      iter_(exec_ctx_->GetCatalog()->GetTable(plan->GetTableOid())->table_->MakeIterator()) {}
 
 /** Initialize the sequential scan */
 void SeqScanExecutor::Init() {
-  auto table_info = GetExecutorContext()->GetCatalog()->GetTable(plan_->GetTableOid());
-  auto lock_mode = LockManager::LockMode::INTENTION_SHARED;
-  if (GetExecutorContext()->IsDelete())
-    lock_mode = LockManager::LockMode::INTENTION_EXCLUSIVE;
-  try {
-    if (exec_ctx_->GetTransaction()->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED) {
-      exec_ctx_->GetLockManager()->LockTable(GetExecutorContext()->GetTransaction(),
-                                            lock_mode, 
-                                            table_info->oid_);
+  while (!iter_.IsEnd()) {
+    auto tuple_info = iter_.GetTuple();
+    auto rid = iter_.GetRID();
+    // std::cout << "rid: " << rid.ToString();
+    // std::cout << "tuple: " << tuple_info.second.ToString(&GetOutputSchema()) << std::endl;
+    auto res = CollectUndoLogs(rid, tuple_info.first, tuple_info.second, 
+                              exec_ctx_->GetTransactionManager()->GetUndoLink(rid),
+                              exec_ctx_->GetTransaction(),
+                              exec_ctx_->GetTransactionManager());
+    if(res.has_value()){
+        auto tuple_opt = ReconstructTuple(&GetOutputSchema(), tuple_info.second, tuple_info.first, *res);
+        if (tuple_opt.has_value()) {
+          // std::cout << "retrive tuple: " << tuple_opt.value().ToString(&GetOutputSchema()) << std::endl;
+          auto tuple = tuple_opt.value();
+          if (plan_->filter_predicate_ != nullptr) {
+            auto value = plan_->filter_predicate_->Evaluate(&tuple, GetOutputSchema());
+            if (value.IsNull() || !value.GetAs<bool>()) {
+              ++iter_;
+              continue;
+            }
+          }
+          vec_.emplace_back(tuple_opt.value(), rid);
+        }
     }
-    iter_.emplace(table_info->table_->MakeEagerIterator());
-  } catch (const TransactionAbortException &e) {
-    LOG_ERROR("TransactionAbortException: %s", e.what());
-    throw ExecutionException("lock failed");
-  }
+    ++iter_;
+    }
+    cursor_ = 0;
 }
 
 /**
@@ -50,70 +65,14 @@ void SeqScanExecutor::Init() {
  * @return `true` if a tuple was produced, `false` if there are no more tuples
  */
 auto SeqScanExecutor::Next(Tuple *tuple, RID *rid) -> bool {
-  // 加锁，不满足的解锁
-  auto lock_mode = LockManager::LockMode::SHARED;
-  if (GetExecutorContext()->IsDelete()) {  // 假设已实现GetIsDelete
-    lock_mode = LockManager::LockMode::EXCLUSIVE;
+  if (cursor_ == vec_.size()) {
+    return false;
   }
-  auto table_info = GetExecutorContext()->GetCatalog()->GetTable(plan_->GetTableOid());
-
-  while (!iter_->IsEnd()) {
-    if (iter_->GetTuple().first.is_deleted_) {
-      ++(*iter_);
-      continue;
-    }
-
-    try {
-      bool res = true;
-      if (exec_ctx_->GetTransaction()->GetIsolationLevel() != IsolationLevel::READ_UNCOMMITTED ||
-          lock_mode != LockManager::LockMode::SHARED){
-        res = exec_ctx_->GetLockManager()->LockRow(exec_ctx_->GetTransaction(),
-                                                  lock_mode,
-                                                  table_info->oid_,
-                                                  iter_->GetRID());
-      }
-
-      if (res) {
-        if (plan_->filter_predicate_ != nullptr) {
-          auto t = iter_->GetTuple().second;
-          auto value = plan_->filter_predicate_->Evaluate(&t, table_info->schema_);
-          if (!value.IsNull() && value.GetAs<bool>()) {
-            *tuple = iter_->GetTuple().second;
-            *rid = iter_->GetRID();
-//							UnlockRowIfRequired(exec_ctx_->GetTransaction(), table_info->oid_, iter_->GetRID());
-            ++(*iter_);
-            return true;
-          } else {
-            if (!exec_ctx_->GetLockManager()->UnlockRow(exec_ctx_->GetTransaction(), 
-                                                        table_info->oid_,
-                                                        iter_->GetRID(), 
-                                                        true)){
-              LOG_ERROR("TransactionAbortException failed");
-              throw ExecutionException("SeqScan Executor Get Table ULock Failed");
-            }
-            ++(*iter_);
-          }
-        } else {
-          *tuple = iter_->GetTuple().second;
-          *rid = iter_->GetRID();
-//						UnlockRowIfRequired(exec_ctx_->GetTransaction(), table_info->oid_, iter_->GetRID());
-          ++(*iter_);
-
-          return true;
-        }
-      } else {
-        throw ExecutionException("SeqScan Executor Get Table Lock Failed");
-      }
-
-    } catch (TransactionAbortException &e) {
-      LOG_ERROR("TransactionAbortException: %s", e.GetInfo().c_str());
-      throw ExecutionException("SeqScan Executor TransactionAbortException: " + std::string(e.what()));
-    } catch (...) {
-
-      throw ExecutionException("SeqScan Executor Unknown Exception");
-    }
-  }
-  return false;
+  *tuple = vec_[cursor_].first;
+  *rid = vec_[cursor_].second;
+  // std::cout << std::endl << "tuple: " << tuple->ToString(&plan_->OutputSchema()) << std::endl;
+  cursor_++;
+  return true;
 }
 
 }  // namespace bustub

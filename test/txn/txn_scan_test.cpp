@@ -16,7 +16,7 @@
 namespace bustub {
 
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
-TEST(TxnScanTest, DISABLED_TupleReconstructTest) {  // NOLINT
+TEST(TxnScanTest, TupleReconstructTest) {  // NOLINT
   auto schema = ParseCreateStatement("a integer,b double,c boolean");
   {
     fmt::println(stderr, "A: only base tuple");
@@ -114,7 +114,7 @@ TEST(TxnScanTest, DISABLED_TupleReconstructTest) {  // NOLINT
   }
 }
 
-TEST(TxnScanTest, DISABLED_CollectUndoLogTest) {  // NOLINT
+TEST(TxnScanTest, CollectUndoLogTest) {  // NOLINT
   auto bustub = std::make_unique<BusTubInstance>();
   auto schema = ParseCreateStatement("a integer,b double,c boolean");
   auto modify_schema = ParseCreateStatement("a integer,b double");
@@ -145,8 +145,8 @@ TEST(TxnScanTest, DISABLED_CollectUndoLogTest) {  // NOLINT
                                                Tuple{{Int(3), Double(3.0), BoolNull()}, schema.get()});
   auto undo_link2 = txn1->AppendUndoLog(
       UndoLog{false, {true, true, false}, Tuple{{Int(1), Double(1.0)}, modify_schema.get()}, txn0->GetCommitTs(), {}});
-  auto undo_link3 = txn2->AppendUndoLog(UndoLog{
-      false, {true, true, false}, Tuple{{Int(2), Double(2.0)}, modify_schema.get()}, txn1->GetCommitTs(), undo_link2});
+  auto undo_link3 = txn2->AppendUndoLog(
+      UndoLog{false, {true, true, false}, Tuple{{Int(2), Double(2.0)}, modify_schema.get()}, txn1->GetCommitTs(), undo_link2});
   bustub->txn_manager_->UpdateUndoLink(rid2, undo_link3, nullptr);
 
   auto rid3 = *table_info->table_->InsertTuple(TupleMeta{txn2->GetCommitTs(), false},
@@ -267,6 +267,7 @@ TEST(TxnScanTest, DISABLED_CollectUndoLogTest) {  // NOLINT
     auto tuple = ReconstructTuple(schema.get(), tuple_res_0.second, tuple_res_0.first, *undo_logs_0_for_txn_to_inspect);
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(1), Double(1.0), BoolNull()});
+    std::cout << "test 0 pass" << std::endl;
   }
 
   {
@@ -274,47 +275,56 @@ TEST(TxnScanTest, DISABLED_CollectUndoLogTest) {  // NOLINT
     auto tuple = ReconstructTuple(schema.get(), tuple_res_1.second, tuple_res_1.first, *undo_logs_1_for_txn_to_inspect);
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(2), Double(2.0), BoolNull()});
+    std::cout << "test 1 pass" << std::endl;
   }
   {
     ASSERT_TRUE(undo_logs_2_for_txn_to_inspect.has_value());
     auto tuple = ReconstructTuple(schema.get(), tuple_res_2.second, tuple_res_2.first, *undo_logs_2_for_txn_to_inspect);
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(2), Double(2.0), BoolNull()});
+    std::cout << "test 2 pass" << std::endl;
   }
-  { ASSERT_FALSE(undo_logs_3_for_txn_to_inspect.has_value()); }
-  { ASSERT_FALSE(undo_logs_4_for_txn_to_inspect.has_value()); }
+  { ASSERT_FALSE(undo_logs_3_for_txn_to_inspect.has_value()); 
+    std::cout << "test 3 pass" << std::endl;}
+  { ASSERT_FALSE(undo_logs_4_for_txn_to_inspect.has_value()); 
+    std::cout << "test 4 pass" << std::endl;}
   {
     ASSERT_TRUE(undo_logs_5_for_txn_to_inspect.has_value());
     auto tuple = ReconstructTuple(schema.get(), tuple_res_5.second, tuple_res_5.first, *undo_logs_5_for_txn_to_inspect);
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(2), Double(2.0), BoolNull()});
+    std::cout << "test 5 pass" << std::endl;
   }
   {
     ASSERT_TRUE(undo_logs_6_for_txn_to_inspect.has_value());
     auto tuple = ReconstructTuple(schema.get(), tuple_res_6.second, tuple_res_6.first, *undo_logs_6_for_txn_to_inspect);
     ASSERT_FALSE(tuple.has_value());
+    std::cout << "test 6 pass" << std::endl;
   }
   {
     ASSERT_TRUE(undo_logs_7_for_txn_to_inspect.has_value());
     auto tuple = ReconstructTuple(schema.get(), tuple_res_7.second, tuple_res_7.first, *undo_logs_7_for_txn_to_inspect);
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(100), Double(100.0), BoolNull()});
+    std::cout << "test 7 pass" << std::endl;
   }
   {
     ASSERT_TRUE(undo_logs_8_for_txn_to_inspect.has_value());
     auto tuple = ReconstructTuple(schema.get(), tuple_res_8.second, tuple_res_8.first, *undo_logs_8_for_txn_to_inspect);
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(100), Double(100.0), BoolNull()});
+    std::cout << "test 8 pass" << std::endl;
   }
   {
     ASSERT_TRUE(undo_logs_9_for_txn_to_inspect.has_value());
     auto tuple = ReconstructTuple(schema.get(), tuple_res_9.second, tuple_res_9.first, *undo_logs_9_for_txn_to_inspect);
     ASSERT_TRUE(tuple.has_value());
     VerifyTuple(schema.get(), *tuple, {Int(1), Double(1.0), BoolNull()});
+    std::cout << "test 9 pass" << std::endl;
   }
 }
 
-TEST(TxnScanTest, DISABLED_ScanTest) {  // NOLINT
+TEST(TxnScanTest, ScanTest) {  // NOLINT
   auto bustub = std::make_unique<BusTubInstance>();
   auto schema = ParseCreateStatement("a integer,b double,c boolean");
   auto modify_schema = ParseCreateStatement("a integer");

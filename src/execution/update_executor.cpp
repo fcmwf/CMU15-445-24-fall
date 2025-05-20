@@ -12,8 +12,9 @@
 
 #include <memory>
 #include "common/macros.h"
-
+#include "concurrency/transaction_manager.h"
 #include "execution/executors/update_executor.h"
+#include "execution/execution_common.h"
 
 namespace bustub {
 
@@ -33,13 +34,6 @@ UpdateExecutor::UpdateExecutor(ExecutorContext *exec_ctx, const UpdatePlanNode *
 /** Initialize the update */
 void UpdateExecutor::Init() {
   child_executor_->Init();
-  try{
-    exec_ctx_->GetLockManager()->LockTable(exec_ctx_->GetTransaction(),
-                                           LockManager::LockMode::INTENTION_EXCLUSIVE,
-                                           plan_->GetTableOid());
-  } catch (TransactionAbortException e) {
-      throw ExecutionException("delete get table lock failed");
-  }
 }
 
 /**
@@ -57,47 +51,51 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     Tuple origin_tuple{};
     RID emit_rid;
     int32_t update_count = 0;
-    bool update_flag = false;
-    RID first_update_rid;
-    auto table_info = GetExecutorContext()->GetCatalog()->GetTable(plan_->GetTableOid());
+    auto table_info_ = GetExecutorContext()->GetCatalog()->GetTable(plan_->GetTableOid());
     while(child_executor_->Next(&origin_tuple, &emit_rid)){
-          if(update_flag && first_update_rid == emit_rid){
-            break;
+          // std::cout << "update rid: " << emit_rid ;
+          auto tuple_info = table_info_->table_->GetTuple(emit_rid);
+          auto tran_temp_ts = exec_ctx_->GetTransaction()->GetTransactionTempTs();
+          //If a tuple is being modified by an uncommitted transaction, no other transactions are allowed to modify it.
+          if (tuple_info.first.ts_ >= TXN_START_ID && tuple_info.first.ts_ != tran_temp_ts) {
+            exec_ctx_->GetTransaction()->SetTainted();
+            throw ExecutionException("w-w conflict in delete");
           }
+          // the tuple is updated by anthor transaction before this transaction start
+          if (tuple_info.first.ts_ < TXN_START_ID && tuple_info.first.ts_ > exec_ctx_->GetTransaction()->GetReadTs()) {
+            exec_ctx_->GetTransaction()->SetTainted();
+            throw ExecutionException("w-w conflict in delete");
+          }
+
+          //get update tuple
           std::vector<Value> values;
           values.reserve(plan_->target_expressions_.size());
           for (const auto &expr : plan_->target_expressions_) {
             values.push_back(expr->Evaluate(&origin_tuple, child_executor_->GetOutputSchema()));
           } 
           Tuple update_tuple{values, &child_executor_->GetOutputSchema()};
-          table_info->table_->UpdateTupleMeta(TupleMeta{0,true}, origin_tuple.GetRid());
-          auto r = table_info->table_->InsertTuple(TupleMeta{0,false},
-                                                    update_tuple,
-                                                    exec_ctx_->GetLockManager(),
-                                                    exec_ctx_->GetTransaction(),
-                                                    plan_->GetTableOid());
-
-          if(!r.has_value()){
-            throw ExecutionException("update insert failed");
+          // std::cout << "updated tuple: " << update_tuple.ToString(&child_executor_->GetOutputSchema()) << std::endl;
+          auto prev_link = exec_ctx_->GetTransactionManager()->GetUndoLink(emit_rid);
+          if (tuple_info.first.ts_ < TXN_START_ID) {
+              // not self modification
+              // update undolog
+              auto undo_log = GenerateNewUndoLog(&child_executor_->GetOutputSchema(),&origin_tuple,&update_tuple,
+                                                tuple_info.first.ts_, exec_ctx_->GetTransactionManager()->GetUndoLink(emit_rid).value_or(UndoLink{}));
+              auto undo_link = exec_ctx_->GetTransaction()->AppendUndoLog(undo_log);
+              exec_ctx_->GetTransactionManager()->UpdateUndoLink(emit_rid, undo_link);
+          }else{
+              // self_modification
+              if(prev_link.has_value() && prev_link.value().prev_txn_ == exec_ctx_->GetTransaction()->GetTransactionId()){
+              // update undolog
+                auto prev_undo_log = exec_ctx_->GetTransactionManager()->GetUndoLog(prev_link.value());
+                auto new_undo_log = GenerateUpdatedUndoLog(&child_executor_->GetOutputSchema(), &origin_tuple, &update_tuple, prev_undo_log);
+                exec_ctx_->GetTransaction()->ModifyUndoLog(prev_link.value().prev_log_idx_, new_undo_log);
+              }
           }
-          auto index = exec_ctx_->GetCatalog()->GetTableIndexes(table_info->name_);
-          for (auto &index_info : index) {
-            index_info->index_->DeleteEntry(origin_tuple.KeyFromTuple(table_info->schema_, 
-                                                                      index_info->key_schema_, 
-                                                                      index_info->index_->GetKeyAttrs()),
-                                            origin_tuple.GetRid(),
-                                            exec_ctx_->GetTransaction());
-            index_info->index_->InsertEntry(update_tuple.KeyFromTuple(table_info->schema_, 
-                                                                      index_info->key_schema_, 
-                                                                      index_info->index_->GetKeyAttrs()),
-                                            *r,
-                                            exec_ctx_->GetTransaction());
-            }
+          table_info_->table_->UpdateTupleInPlace({exec_ctx_->GetTransaction()->GetTransactionTempTs(), false}, 
+                                                  update_tuple, emit_rid);
+          exec_ctx_->GetTransaction()->AppendWriteSet(table_info_->oid_, emit_rid);
           update_count++;
-          if(!update_flag){
-            first_update_rid = *r;
-            update_flag = true;
-          }
     }
     is_end_ = true;
     std::vector<Value> values{};
