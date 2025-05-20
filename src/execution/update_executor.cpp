@@ -92,6 +92,19 @@ auto UpdateExecutor::Next(Tuple *tuple, RID *rid) -> bool {
                 exec_ctx_->GetTransaction()->ModifyUndoLog(prev_link.value().prev_log_idx_, new_undo_log);
               }
           }
+          auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
+          BUSTUB_ENSURE(indexes.size() <= 1, "not only one index");
+          if(indexes.size()==1) {
+              auto index = indexes[0];
+              index->index_->DeleteEntry(
+                  origin_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()), 
+                  emit_rid,
+                  exec_ctx_->GetTransaction());
+              index->index_->InsertEntry(
+                  update_tuple.KeyFromTuple(table_info_->schema_, index->key_schema_, index->index_->GetKeyAttrs()), 
+                  emit_rid,
+                  exec_ctx_->GetTransaction());
+          }
           table_info_->table_->UpdateTupleInPlace({exec_ctx_->GetTransaction()->GetTransactionTempTs(), false}, 
                                                   update_tuple, emit_rid);
           exec_ctx_->GetTransaction()->AppendWriteSet(table_info_->oid_, emit_rid);

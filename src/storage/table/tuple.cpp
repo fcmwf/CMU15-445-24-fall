@@ -82,6 +82,7 @@ auto Tuple::GetValue(const Schema *schema, const uint32_t column_idx) const -> V
   const TypeId column_type = schema->GetColumn(column_idx).GetType();
   const char *data_ptr = GetDataPtr(schema, column_idx);
   // the third parameter "is_inlined" is unused
+  // std::cout << "Pointer address: " << static_cast<const void*>(data_ptr) << std::endl;
   return Value::DeserializeFrom(data_ptr, column_type);
 }
 

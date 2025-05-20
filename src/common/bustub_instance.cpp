@@ -382,6 +382,15 @@ auto BusTubInstance::ExecuteSqlTxn(const std::string &sql, ResultWriter &writer,
     }
     writer.EndHeader();
 
+    // std::cout << "vector size: " << result_set.size() << std::endl;
+    // if(schema.GetColumnCount()==1){
+    //     std::vector<Value> values{};
+    //     values.emplace_back(TypeId::INTEGER, 666);
+    //     Tuple t{values, &schema};
+    //     std::cout << "result in bustub instance: " << t.ToString(&schema) << std::endl;
+        // std::cout << "result tuple: " << result_set.end()->ToString(&schema) << std::endl;
+    // }
+
     // Transforming result set into strings.
     for (const auto &tuple : result_set) {
       writer.BeginRow();

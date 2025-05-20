@@ -63,6 +63,7 @@ auto TransactionManager::VerifyTxn(Transaction *txn) -> bool { return true; }
  * yourself
  */
 auto TransactionManager::Commit(Transaction *txn) -> bool {
+  // std::cout << "commit:" << std::endl;
   std::unique_lock<std::mutex> commit_lck(commit_mutex_);
 
   // TODO(fall2023): acquire commit ts!
@@ -84,6 +85,7 @@ auto TransactionManager::Commit(Transaction *txn) -> bool {
   for (const auto &[table_id, rids] : txn->GetWriteSets()) {
     auto table_info = catalog_->GetTable(table_id);
     for (auto rid : rids) {
+      // std::cout << rid.ToString();
       auto tuple_info = table_info->table_->GetTuple(rid);
       table_info->table_->UpdateTupleInPlace({commit_ts, tuple_info.first.is_deleted_}, tuple_info.second, rid);
     }

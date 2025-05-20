@@ -45,7 +45,6 @@ class InsertExecutor : public AbstractExecutor {
 
   std::shared_ptr<TableInfo> table_info_;
   int32_t nums_{0};
-  SchemaRef schema_;
 };
 
 }  // namespace bustub

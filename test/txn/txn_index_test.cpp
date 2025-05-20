@@ -26,7 +26,7 @@ namespace bustub {
 
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 
-TEST(TxnIndexTest, DISABLED_IndexInsertTest) {  // NOLINT
+TEST(TxnIndexTest,  IndexInsertTest) {  // NOLINT
   auto bustub = std::make_unique<BusTubInstance>();
   const std::string query = "SELECT * FROM maintable";
 
@@ -95,7 +95,7 @@ TEST(TxnIndexTest, DISABLED_IndexInsertTest) {  // NOLINT
                                 }));
 }
 
-TEST(TxnIndexTest, DISABLED_InsertDeleteTest) {  // NOLINT
+TEST(TxnIndexTest,  InsertDeleteTest) {  // NOLINT
   const std::string query = "SELECT * FROM maintable";
 
   auto bustub = std::make_unique<BusTubInstance>();
@@ -127,7 +127,7 @@ TEST(TxnIndexTest, DISABLED_InsertDeleteTest) {  // NOLINT
                                     IntResult{{1, 0}, {2, 0}, {3, 0}, {4, 0}}));
 }
 
-TEST(TxnIndexTest, DISABLED_UpdateTest) {  // NOLINT
+TEST(TxnIndexTest,  UpdateTest) {  // NOLINT
   const std::string query = "SELECT * FROM maintable";
 
   const auto prepare =
@@ -150,6 +150,8 @@ TEST(TxnIndexTest, DISABLED_UpdateTest) {  // NOLINT
     WithTxn(txn3, ExecuteTxn(*bustub, _var, _txn, "DELETE FROM maintable WHERE col1 = 6"));
     TxnMgrDbg("after preparation", bustub->txn_manager_.get(), table_info.get(), table_info->table_.get());
     // at this point, we have (4, 0) inserted, (5, 0) deleted, and (6, 0) self inserted and deleted.
+    std::cout << "txn1: " << txn1->GetReadTs() << " " << txn1->GetCommitTs() <<  txn1->GetTransactionTempTs() <<  std::endl;
+    std::cout << "txn2: " << txn2->GetReadTs() << " " << txn2->GetCommitTs() <<  txn2->GetTransactionTempTs() <<  std::endl;
     return {txn1_reverify, txn2_reverify, txn3};
   };
 
@@ -170,11 +172,16 @@ TEST(TxnIndexTest, DISABLED_UpdateTest) {  // NOLINT
     Execute(*bustub, "CREATE TABLE maintable(col1 int primary key, col2 int)");
     auto table_info = bustub->catalog_->GetTable("maintable");
     auto [txn1_reverify, txn2_reverify, txn3] = prepare(bustub);
+
+    std::cout << "txn1: " << txn1_reverify->GetReadTs() << " " << txn1_reverify->GetCommitTs() << txn1_reverify->GetTransactionTempTs() << std::endl;
+    std::cout << "txn2: " << txn2_reverify->GetReadTs() << " " << txn2_reverify->GetCommitTs() << txn2_reverify->GetTransactionTempTs() << std::endl;
+    std::cout << "txn3: " << txn3->GetReadTs() << " " << txn3->GetCommitTs() << txn3->GetTransactionTempTs() << std::endl;
+
     WithTxn(txn3, QueryShowResult(*bustub, _var, _txn, query, IntResult{{1, 0}, {4, 0}}));
     WithTxn(txn3, QueryIndex(*bustub, _var, _txn, query, "col1", std::vector<int>{1, 2, 3, 4, 5, 6},
                              IntResult{{1, 0}, {}, {}, {4, 0}, {}, {}}));
-
-    WithTxn(txn3, ExecuteTxn(*bustub, _var, _txn, "INSERT INTO maintable VALUES (2, 1), (5, 1), (3, 1), (6, 1)"));
+    
+    WithTxn(txn3, ExecuteTxn(*bustub, _var, _txn, "INSERT INTO maintable VALUES (2, 1), (5, 1), (3, 1), (6, 1)")); //error
     TxnMgrDbg("after txn3 insert operations", bustub->txn_manager_.get(), table_info.get(), table_info->table_.get());
     WithTxn(txn3, ExecuteTxn(*bustub, _var, _txn, "UPDATE maintable SET col2 = col2 + 10"));
     TxnMgrDbg("after txn3 update operations", bustub->txn_manager_.get(), table_info.get(), table_info->table_.get());
@@ -224,7 +231,7 @@ TEST(TxnIndexTest, DISABLED_UpdateTest) {  // NOLINT
   // hidden tests...
 }
 
-TEST(GradingTxnIndexTest, DISABLED_IndexUpdateConflictTest) {  // NOLINT
+TEST(GradingTxnIndexTest,   IndexUpdateConflictTest) {  // NOLINT
   const std::string query = "SELECT * FROM maintable";
 
   auto bustub = std::make_unique<BusTubInstance>();
@@ -248,7 +255,7 @@ TEST(GradingTxnIndexTest, DISABLED_IndexUpdateConflictTest) {  // NOLINT
   // hidden tests...
 }
 
-TEST(TxnIndexTest, DISABLED_UpdatePrimaryKeyTest) {  // NOLINT
+TEST(TxnIndexTest,  UpdatePrimaryKeyTest) {  // NOLINT
   const std::string query = "SELECT * FROM maintable";
 
   auto bustub = std::make_unique<BusTubInstance>();

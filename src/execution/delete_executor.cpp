@@ -56,6 +56,7 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
   auto table_info_ = GetExecutorContext()->GetCatalog()->GetTable(plan_->GetTableOid());
   while(child_executor_->Next(&delete_tuple, &emit_rid)){
       // std::cout << "delete rid:" << emit_rid.ToString();
+      // std::cout << "delete tuple:" << delete_tuple.ToString(&child_executor_->GetOutputSchema()) << std::endl;
       auto tuple_info = table_info_->table_->GetTuple(emit_rid);
       auto tran_temp_ts = exec_ctx_->GetTransaction()->GetTransactionTempTs();
       //If a tuple is being modified by an uncommitted transaction, no other transactions are allowed to modify it.
@@ -82,6 +83,9 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
           }
           auto undo_link = exec_ctx_->GetTransaction()->AppendUndoLog(undo_log);
           exec_ctx_->GetTransactionManager()->UpdateUndoLink(emit_rid, undo_link);
+          // std::cout << "log: " << undo_log.is_deleted_ << " " << undo_log.ts_ << std::endl;
+          // std::cout << "delete tuple: " << delete_tuple.ToString(&child_executor_->GetOutputSchema()) << std::endl;
+          // std::cout << "delete rid: " << emit_rid.ToString();
       }else{
           // self modification
           if(prev_link.has_value() && prev_link.value().prev_txn_ == exec_ctx_->GetTransaction()->GetTransactionId()){
@@ -90,6 +94,7 @@ auto DeleteExecutor::Next(Tuple *tuple, RID *rid) -> bool {
               exec_ctx_->GetTransaction()->ModifyUndoLog(prev_link.value().prev_log_idx_, new_undo_log);
           }
       }
+      // std::cout << "temp_ts: " << exec_ctx_->GetTransaction()->GetTransactionTempTs() << std::endl;
       table_info_->table_->UpdateTupleMeta({exec_ctx_->GetTransaction()->GetTransactionTempTs(), true},emit_rid);
       exec_ctx_->GetTransaction()->AppendWriteSet(table_info_->oid_, emit_rid);
 

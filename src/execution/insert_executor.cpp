@@ -35,25 +35,14 @@ namespace bustub {
 // }
 InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx) {
+    : AbstractExecutor(exec_ctx), plan_(plan) {
   child_executor_ = std::move(child_executor);
   table_info_ = exec_ctx->GetCatalog()->GetTable(plan->table_oid_);
 }
 
 /** Initialize the insert */
 void InsertExecutor::Init() {
-  // child_executor_->Init();
-  // try {
-  //     GetExecutorContext()->GetLockManager()->LockTable(GetExecutorContext()->GetTransaction(),
-  //                                                       LockManager::LockMode::INTENTION_EXCLUSIVE,
-  //                                                       plan_->GetTableOid());
-  // } catch (TransactionAbortException e) {
-  //     throw ExecutionException("insert get table lock failed");
-  // }
   child_executor_->Init();
-  Column col("num", INTEGER);
-  std::vector<Column> vec{col};
-  schema_ = std::make_shared<const Schema>(vec);
 }
 /**
  * Yield the number of rows inserted into the table.
@@ -74,45 +63,57 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
         return false;
       }
       is_end_ = true;
-      std::vector<Value> values;
-      values.push_back(ValueFactory::GetIntegerValue(nums_));
-      *tuple = Tuple(values, schema_.get());
+      std::vector<Value> values{};
+      values.reserve(GetOutputSchema().GetColumnCount());
+      values.emplace_back(TypeId::INTEGER, nums_);
+      *tuple = Tuple{values, &GetOutputSchema()};
+      // std::cout << "result: " << tuple->ToString(&GetOutputSchema()) << std::endl;
       return true;
     }
-
+    // std::cout << "insert tuple: " << in_tuple.ToString(&child_executor_->GetOutputSchema()) << std::endl;
     // check the tuple already in index?
     auto indexes = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
     BUSTUB_ENSURE(indexes.size() <= 1, "not only one index");
-    for (auto &index_info : indexes) {
+    if(indexes.size()==1) {
+      auto index_info = indexes[0];
       auto attr = index_info->index_->GetKeyAttrs();
       BUSTUB_ENSURE(attr.size() == 1, "hashindex for many attrs?");
       Tuple key({in_tuple.GetValue(&table_info_->schema_, attr[0])}, &index_info->key_schema_);
       std::vector<RID> result;
       index_info->index_->ScanKey(key, &result, exec_ctx_->GetTransaction());
-      BUSTUB_ENSURE(result.size() == 1, "index more than one tuple");
       if (!result.empty()) {
         *rid = result[0];
+        // std::cout << "rid already in" << std::endl;
+        // std::cout << rid->ToString();
         auto tuple_info = table_info_->table_->GetTuple(*rid);
-        // if the tuple in tableheap is deleted and the deleted ts smaller than current txn read ts, than still insert
-        // success
-        // todo is it needed to handle the self modification case?
+        // if the tuple in tableheap is deleted and the deleted ts smaller than current txn read ts, than still insert successfully
+        // is it needed to handle the self modification case?
         if (tuple_info.first.is_deleted_ && tuple_info.first.ts_ <= exec_ctx_->GetTransaction()->GetReadTs()) {
-          // get the versioninfo and lock by set in_process to true
-          auto version_link_opt = exec_ctx_->GetTransactionManager()->GetUndoLink(*rid);
-          if (!version_link_opt.has_value()) {
-              exec_ctx_->GetTransaction()->SetTainted();
-              throw ExecutionException("insert conflict");
-          }
-          auto version_link = version_link_opt.value();
-          // update the undolog chain
-          std::vector<bool> modified_fields(table_info_->schema_.GetColumnCount());
-          auto undo_link = exec_ctx_->GetTransaction()->AppendUndoLog(
-              UndoLog{true, modified_fields, Tuple(), tuple_info.first.ts_, version_link});
-          exec_ctx_->GetTransactionManager()->UpdateUndoLink(*rid, undo_link);
-          // update tableheap
-          table_info_->table_->UpdateTupleInPlace({exec_ctx_->GetTransaction()->GetTransactionTempTs(), false},
-                                                  in_tuple, *rid);
-          exec_ctx_->GetTransaction()->AppendWriteSet(table_info_->oid_, *rid);
+            // get the versioninfo and lock by set in_process to true
+            auto version_link_opt = exec_ctx_->GetTransactionManager()->GetUndoLink(*rid);
+            if (!version_link_opt.has_value()) {
+                // exec_ctx_->GetTransaction()->SetTainted();
+                // throw ExecutionException("insert conflict");
+            }else{
+                auto version_link = version_link_opt.value();
+                // update the undolog chain
+                std::vector<bool> modified_fields(table_info_->schema_.GetColumnCount());
+                auto undo_link = exec_ctx_->GetTransaction()->AppendUndoLog(
+                    UndoLog{true, modified_fields, Tuple(), tuple_info.first.ts_, version_link});
+                exec_ctx_->GetTransactionManager()->UpdateUndoLink(*rid, undo_link);
+            }
+            // update tableheap
+            table_info_->table_->UpdateTupleInPlace({exec_ctx_->GetTransaction()->GetTransactionTempTs(), false},
+                                                    in_tuple, *rid);
+            exec_ctx_->GetTransaction()->AppendWriteSet(table_info_->oid_, *rid);
+            nums_++;
+            continue;
+        }else if(tuple_info.first.is_deleted_ && tuple_info.first.ts_ == exec_ctx_->GetTransaction()->GetTransactionTempTs()){
+            table_info_->table_->UpdateTupleInPlace({exec_ctx_->GetTransaction()->GetTransactionTempTs(), false},
+                                                    in_tuple, *rid);
+            exec_ctx_->GetTransaction()->AppendWriteSet(table_info_->oid_, *rid);
+            nums_++;
+            continue;
         }
         exec_ctx_->GetTransaction()->SetTainted();
         throw ExecutionException("insert conflict");
@@ -125,11 +126,14 @@ auto InsertExecutor::Next(Tuple *tuple, RID *rid) -> bool {
     if (rid_opt.has_value()) {
       *rid = rid_opt.value();
     }
-    // std::cout << "rid info:" << rid->ToString() << std::endl;
+
+    // std::cout << "rid info:" << rid->ToString();
+
     exec_ctx_->GetTransaction()->AppendWriteSet(table_info_->oid_, *rid);
     for (auto &index_info : indexes) {
       auto attr = index_info->index_->GetKeyAttrs();
       BUSTUB_ENSURE(attr.size() == 1, "hashindex for many attrs?");
+      // std::cout << "index attr: " << attr[0] << std::endl;
       Tuple key({in_tuple.GetValue(&table_info_->schema_, attr[0])}, &index_info->key_schema_);
       bool res = index_info->index_->InsertEntry(key, *rid, exec_ctx_->GetTransaction());
       if (!res) {
